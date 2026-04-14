@@ -84,6 +84,7 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
             date_kst TEXT NOT NULL,
             source_video_count INTEGER NOT NULL,
             source_channel_count INTEGER NOT NULL,
+            source_channels_json TEXT,
             average_trend_score DOUBLE NOT NULL,
             top_video_id TEXT NOT NULL,
             recommended_format TEXT NOT NULL,

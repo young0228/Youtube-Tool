@@ -83,6 +83,10 @@ class DeterministicTopicClusterer:
                     date_kst=now_kst,
                     source_video_count=source_video_count,
                     source_channel_count=source_channel_count,
+                    source_channels_json=json.dumps(
+                        sorted({r.channel_id for r in cluster.rows}),
+                        ensure_ascii=False,
+                    ),
                     average_trend_score=avg_trend,
                     top_video_id=top_video.video_id,
                     recommended_format=_recommend_format(

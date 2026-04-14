@@ -13,6 +13,7 @@ from ytradar.config.features import load_feature_config
 from ytradar.db import initialize_database
 from ytradar.db.repository import DuckDBRepository
 from ytradar.features.engineer import FeatureEngineer
+from ytradar.reporting.topic_report import TopicReportService
 
 
 def collect_metadata_command(args: argparse.Namespace) -> None:
@@ -97,6 +98,29 @@ def cluster_topics_command(args: argparse.Namespace) -> None:
     print(f"Clustered and stored {len(candidates)} topic candidates.")
 
 
+def report_topics_command(args: argparse.Namespace) -> None:
+    """Render/export topic candidates for editorial review."""
+
+    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
+    repository = DuckDBRepository(db_path)
+    report_service = TopicReportService(repository)
+
+    rows = report_service.load_report_rows()
+    if not rows:
+        print("No topic_candidates rows found. Run cluster-topics first.")
+        return
+
+    console_output = report_service.render_console_report(rows, top_n=args.top_n)
+    print(console_output)
+
+    csv_path = report_service.export_csv(rows, args.csv_path)
+    print(f"CSV export: {csv_path}")
+
+    if args.md_path:
+        md_path = report_service.export_markdown(rows, args.md_path, top_n=args.top_n)
+        print(f"Markdown export: {md_path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the root parser."""
 
@@ -126,6 +150,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cluster videos into deterministic topic candidates",
     )
     cluster_parser.set_defaults(func=cluster_topics_command)
+
+    report_parser = subparsers.add_parser(
+        "report-topics",
+        help="Generate console/CSV/Markdown report from topic_candidates",
+    )
+    report_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=20,
+        help="Max candidates to display per section in console/markdown report",
+    )
+    report_parser.add_argument(
+        "--csv-path",
+        default="data/exports/topic_candidates.csv",
+        help="CSV output path",
+    )
+    report_parser.add_argument(
+        "--md-path",
+        default="",
+        help="Optional markdown output path (empty disables markdown export)",
+    )
+    report_parser.set_defaults(func=report_topics_command)
 
     return parser
 

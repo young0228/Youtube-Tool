@@ -57,6 +57,7 @@ class TopicCandidateRecord:
     date_kst: str
     source_video_count: int
     source_channel_count: int
+    source_channels_json: str | None
     average_trend_score: float
     top_video_id: str
     recommended_format: str
@@ -286,18 +287,20 @@ class DuckDBRepository:
             date_kst,
             source_video_count,
             source_channel_count,
+            source_channels_json,
             average_trend_score,
             top_video_id,
             recommended_format,
             status,
             generated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(topic_cluster_id) DO UPDATE SET
             representative_label = excluded.representative_label,
             date_kst = excluded.date_kst,
             source_video_count = excluded.source_video_count,
             source_channel_count = excluded.source_channel_count,
+            source_channels_json = excluded.source_channels_json,
             average_trend_score = excluded.average_trend_score,
             top_video_id = excluded.top_video_id,
             recommended_format = excluded.recommended_format,
@@ -313,6 +316,7 @@ class DuckDBRepository:
                     c.date_kst,
                     c.source_video_count,
                     c.source_channel_count,
+                    c.source_channels_json,
                     c.average_trend_score,
                     c.top_video_id,
                     c.recommended_format,
@@ -322,5 +326,45 @@ class DuckDBRepository:
                 for c in candidates
             ]
             conn.executemany(sql, rows)
+        finally:
+            conn.close()
+
+    def fetch_topic_candidates_report_rows(self) -> list[dict]:
+        """Fetch denormalized topic candidate rows for reporting/export."""
+
+        sql = """
+        SELECT
+            tc.topic_cluster_id,
+            tc.representative_label,
+            tc.date_kst,
+            tc.source_video_count,
+            tc.source_channel_count,
+            tc.source_channels_json,
+            tc.average_trend_score,
+            tc.top_video_id,
+            vr.url AS top_video_url,
+            tc.recommended_format,
+            tc.status,
+            tc.generated_at
+        FROM topic_candidates tc
+        LEFT JOIN videos_raw vr ON tc.top_video_id = vr.video_id
+        ORDER BY tc.average_trend_score DESC;
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(sql).fetchall()
+            columns = [col[0] for col in conn.description]
+            return [dict(zip(columns, row)) for row in rows]
+        finally:
+            conn.close()
+
+    def fetch_channel_name_map(self) -> dict[str, str]:
+        """Fetch channel id -> display name mapping for report labels."""
+
+        sql = "SELECT channel_id, display_name FROM channels;"
+        conn = self._connect()
+        try:
+            rows = conn.execute(sql).fetchall()
+            return {str(channel_id): str(display_name) for channel_id, display_name in rows}
         finally:
             conn.close()
