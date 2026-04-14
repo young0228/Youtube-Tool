@@ -1,4 +1,4 @@
-"""CLI entry points for YouTube Topic Radar MVP."""
+"""Project CLI entrypoint for YouTube Topic Radar MVP."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from ytradar.clustering.topic_cluster import DeterministicTopicClusterer
+from ytradar.collectors.youtube_collector import CollectorSettings, YouTubeMetadataCollector
 from ytradar.config.channels import load_channels_config
 from ytradar.config.clustering import load_clustering_config
 from ytradar.config.features import load_feature_config
@@ -16,103 +17,113 @@ from ytradar.features.engineer import FeatureEngineer
 from ytradar.reporting.topic_report import TopicReportService
 
 
-def collect_metadata_command(args: argparse.Namespace) -> None:
-    """Run metadata collection and save rows into `videos_raw`."""
-    from ytradar.collectors.youtube_collector import (
-        CollectorSettings,
-        YouTubeMetadataCollector,
-    )
+def _db_path() -> Path:
+    return Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
+
+
+def _channels_config_path() -> Path:
+    return Path(os.getenv("YTRADAR_CHANNELS_CONFIG", "configs/channels.yaml"))
+
+
+def _features_config_path() -> Path:
+    return Path(os.getenv("YTRADAR_FEATURES_CONFIG", "configs/features.yaml"))
+
+
+def _clustering_config_path() -> Path:
+    return Path(os.getenv("YTRADAR_CLUSTERING_CONFIG", "configs/clustering.yaml"))
+
+
+def init_db_command(_: argparse.Namespace) -> None:
+    """Initialize DuckDB schema."""
+
+    path = initialize_database(_db_path())
+    print(f"Initialized database: {path}")
+
+
+def sync_channels_command(_: argparse.Namespace) -> None:
+    """Upsert configured channels into `channels` table."""
+
+    initialize_database(_db_path())
+    repository = DuckDBRepository(_db_path())
+
+    channels = load_channels_config(_channels_config_path())
+    rows = [(c.channel_id, c.channel_key, c.display_name, c.group) for c in channels]
+    repository.upsert_channels(rows)
+    print(f"Synced channels: {len(rows)}")
+
+
+def collect_videos_command(args: argparse.Namespace) -> None:
+    """Fetch metadata for recent videos and upsert into `videos_raw`."""
 
     api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
     if not api_key:
         raise SystemExit("Missing YOUTUBE_API_KEY environment variable")
 
-    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
-    channels_config = Path(os.getenv("YTRADAR_CHANNELS_CONFIG", "configs/channels.yaml"))
+    initialize_database(_db_path())
 
-    initialize_database(db_path)
-
-    channels = load_channels_config(channels_config)
+    channels = load_channels_config(_channels_config_path())
     if not channels:
-        print("No active channels configured. Nothing to fetch.")
+        print("No active channels configured. Nothing to collect.")
         return
+
+    repository = DuckDBRepository(_db_path())
+    repository.upsert_channels([(c.channel_id, c.channel_key, c.display_name, c.group) for c in channels])
 
     collector = YouTubeMetadataCollector(
         api_key=api_key,
         settings=CollectorSettings(lookback_days=args.days),
     )
-    repository = DuckDBRepository(db_path)
-
-    repository.upsert_channels(
-        [
-            (c.channel_id, c.channel_key, c.display_name, c.group)
-            for c in channels
-        ]
-    )
-
     videos = collector.collect_recent_videos(channels)
     repository.upsert_videos_raw(videos)
+    print(f"Collected videos: {len(videos)}")
 
-    print(f"Fetched and stored {len(videos)} video metadata rows.")
 
+def compute_features_command(_: argparse.Namespace) -> None:
+    """Compute deterministic features from videos_raw."""
 
-def engineer_features_command(args: argparse.Namespace) -> None:
-    """Compute deterministic features from videos_raw into video_features."""
+    initialize_database(_db_path())
+    repository = DuckDBRepository(_db_path())
 
-    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
-    features_config = Path(os.getenv("YTRADAR_FEATURES_CONFIG", "configs/features.yaml"))
-
-    initialize_database(db_path)
-
-    repository = DuckDBRepository(db_path)
     rows = repository.fetch_videos_raw()
     if not rows:
-        print("No videos_raw rows found. Run collect-metadata first.")
+        print("No videos_raw rows found. Run collect-videos first.")
         return
 
-    config = load_feature_config(features_config)
-    engineer = FeatureEngineer(config)
-    features = engineer.build_features(rows)
+    config = load_feature_config(_features_config_path())
+    features = FeatureEngineer(config).build_features(rows)
     repository.upsert_video_features(features)
-    print(f"Engineered and stored {len(features)} video feature rows.")
+    print(f"Computed features: {len(features)}")
 
 
-def cluster_topics_command(args: argparse.Namespace) -> None:
-    """Build deterministic topic clusters and store topic candidates."""
+def build_topics_command(_: argparse.Namespace) -> None:
+    """Build deterministic topic candidates from engineered features."""
 
-    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
-    clustering_config = Path(os.getenv("YTRADAR_CLUSTERING_CONFIG", "configs/clustering.yaml"))
+    initialize_database(_db_path())
+    repository = DuckDBRepository(_db_path())
 
-    initialize_database(db_path)
-
-    repository = DuckDBRepository(db_path)
     rows = repository.fetch_rows_for_clustering()
     if not rows:
-        print("No rows available for clustering. Run engineer-features first.")
+        print("No feature rows found. Run compute-features first.")
         return
 
-    config = load_clustering_config(clustering_config)
-    clusterer = DeterministicTopicClusterer(config)
-    candidates = clusterer.build_candidates(rows)
+    config = load_clustering_config(_clustering_config_path())
+    candidates = DeterministicTopicClusterer(config).build_candidates(rows)
     repository.upsert_topic_candidates(candidates)
-    print(f"Clustered and stored {len(candidates)} topic candidates.")
+    print(f"Built topics: {len(candidates)}")
 
 
-def report_topics_command(args: argparse.Namespace) -> None:
-    """Render/export topic candidates for editorial review."""
+def export_report_command(args: argparse.Namespace) -> None:
+    """Export report from topic_candidates to console/CSV/optional markdown."""
 
-    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
-    repository = DuckDBRepository(db_path)
+    repository = DuckDBRepository(_db_path())
     report_service = TopicReportService(repository)
 
     rows = report_service.load_report_rows()
     if not rows:
-        print("No topic_candidates rows found. Run cluster-topics first.")
+        print("No topic_candidates rows found. Run build-topics first.")
         return
 
-    console_output = report_service.render_console_report(rows, top_n=args.top_n)
-    print(console_output)
-
+    print(report_service.render_console_report(rows, top_n=args.top_n))
     csv_path = report_service.export_csv(rows, args.csv_path)
     print(f"CSV export: {csv_path}")
 
@@ -121,63 +132,73 @@ def report_topics_command(args: argparse.Namespace) -> None:
         print(f"Markdown export: {md_path}")
 
 
+def run_all_command(args: argparse.Namespace) -> None:
+    """Run pipeline end-to-end in recommended order."""
+
+    init_db_command(args)
+    sync_channels_command(args)
+    collect_videos_command(args)
+    compute_features_command(args)
+    build_topics_command(args)
+    export_report_command(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    """Build the root parser."""
+    """Build CLI parser with minimal command set."""
 
     parser = argparse.ArgumentParser(description="YouTube Topic Radar CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    collect_parser = subparsers.add_parser(
-        "collect-metadata",
-        help="Fetch recent YouTube metadata for configured channels",
-    )
-    collect_parser.add_argument(
-        "--days",
-        type=int,
-        default=7,
-        help="Lookback window in days for recent videos",
-    )
-    collect_parser.set_defaults(func=collect_metadata_command)
+    init_db = subparsers.add_parser("init-db", help="Initialize local DuckDB schema")
+    init_db.set_defaults(func=init_db_command)
 
-    features_parser = subparsers.add_parser(
-        "engineer-features",
-        help="Compute deterministic features from videos_raw into video_features",
-    )
-    features_parser.set_defaults(func=engineer_features_command)
+    sync = subparsers.add_parser("sync-channels", help="Sync configured channels into database")
+    sync.set_defaults(func=sync_channels_command)
 
-    cluster_parser = subparsers.add_parser(
-        "cluster-topics",
-        help="Cluster videos into deterministic topic candidates",
-    )
-    cluster_parser.set_defaults(func=cluster_topics_command)
+    collect = subparsers.add_parser("collect-videos", help="Collect recent video metadata only")
+    collect.add_argument("--days", type=int, default=7, help="Lookback window in days")
+    collect.set_defaults(func=collect_videos_command)
 
-    report_parser = subparsers.add_parser(
-        "report-topics",
-        help="Generate console/CSV/Markdown report from topic_candidates",
-    )
-    report_parser.add_argument(
-        "--top-n",
-        type=int,
-        default=20,
-        help="Max candidates to display per section in console/markdown report",
-    )
-    report_parser.add_argument(
+    compute = subparsers.add_parser("compute-features", help="Compute deterministic video features")
+    compute.set_defaults(func=compute_features_command)
+
+    topics = subparsers.add_parser("build-topics", help="Build deterministic topic clusters")
+    topics.set_defaults(func=build_topics_command)
+
+    report = subparsers.add_parser("export-report", help="Print ranked report and export files")
+    report.add_argument("--top-n", type=int, default=20, help="Top candidates per section")
+    report.add_argument(
         "--csv-path",
         default="data/exports/topic_candidates.csv",
         help="CSV output path",
     )
-    report_parser.add_argument(
+    report.add_argument(
         "--md-path",
         default="",
-        help="Optional markdown output path (empty disables markdown export)",
+        help="Optional markdown output path",
     )
-    report_parser.set_defaults(func=report_topics_command)
+    report.set_defaults(func=export_report_command)
+
+    run_all = subparsers.add_parser("run-all", help="Run entire pipeline end-to-end")
+    run_all.add_argument("--days", type=int, default=7, help="Lookback window in days")
+    run_all.add_argument("--top-n", type=int, default=20, help="Top candidates per section")
+    run_all.add_argument(
+        "--csv-path",
+        default="data/exports/topic_candidates.csv",
+        help="CSV output path",
+    )
+    run_all.add_argument(
+        "--md-path",
+        default="",
+        help="Optional markdown output path",
+    )
+    run_all.set_defaults(func=run_all_command)
 
     return parser
 
 
 def main() -> None:
-    """CLI main."""
+    """CLI main entrypoint."""
 
     parser = build_parser()
     args = parser.parse_args()
