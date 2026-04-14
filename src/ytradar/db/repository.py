@@ -1,0 +1,135 @@
+"""DuckDB persistence helpers for metadata collection."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import duckdb
+
+
+@dataclass(slots=True)
+class VideoRawRecord:
+    """Normalized raw metadata record stored in `videos_raw`."""
+
+    video_id: str
+    channel_id: str
+    channel_name: str
+    title: str
+    description: str | None
+    published_at: datetime
+    duration: str | None
+    view_count: int | None
+    like_count: int | None
+    comment_count: int | None
+    live_broadcast_flag: str | None
+    url: str
+    tags_json: str | None
+    raw_payload_json: str
+    fetched_at: datetime
+
+
+class DuckDBRepository:
+    """Simple repository for channels/videos tables."""
+
+    def __init__(self, db_path: str | Path) -> None:
+        self.db_path = str(Path(db_path).expanduser().resolve())
+
+    def _connect(self) -> duckdb.DuckDBPyConnection:
+        return duckdb.connect(self.db_path)
+
+    def upsert_channels(self, channels: list[tuple[str, str, str, str]]) -> None:
+        """Upsert channels into the channels table.
+
+        Args:
+            channels: List of tuples:
+                (channel_id, channel_key, display_name, channel_group)
+        """
+
+        if not channels:
+            return
+
+        sql = """
+        INSERT INTO channels (channel_id, channel_key, display_name, channel_group)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(channel_id) DO UPDATE SET
+            channel_key = excluded.channel_key,
+            display_name = excluded.display_name,
+            channel_group = excluded.channel_group,
+            updated_at = current_timestamp;
+        """
+
+        conn = self._connect()
+        try:
+            conn.executemany(sql, channels)
+        finally:
+            conn.close()
+
+    def upsert_videos_raw(self, videos: list[VideoRawRecord]) -> None:
+        """Upsert normalized raw metadata records into `videos_raw`."""
+
+        if not videos:
+            return
+
+        sql = """
+        INSERT INTO videos_raw (
+            video_id,
+            channel_id,
+            channel_name,
+            title,
+            description,
+            published_at,
+            duration,
+            view_count,
+            like_count,
+            comment_count,
+            live_broadcast_flag,
+            url,
+            tags_json,
+            raw_payload_json,
+            fetched_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(video_id) DO UPDATE SET
+            channel_id = excluded.channel_id,
+            channel_name = excluded.channel_name,
+            title = excluded.title,
+            description = excluded.description,
+            published_at = excluded.published_at,
+            duration = excluded.duration,
+            view_count = excluded.view_count,
+            like_count = excluded.like_count,
+            comment_count = excluded.comment_count,
+            live_broadcast_flag = excluded.live_broadcast_flag,
+            url = excluded.url,
+            tags_json = excluded.tags_json,
+            raw_payload_json = excluded.raw_payload_json,
+            fetched_at = excluded.fetched_at;
+        """
+
+        conn = self._connect()
+        try:
+            rows = [
+                (
+                    v.video_id,
+                    v.channel_id,
+                    v.channel_name,
+                    v.title,
+                    v.description,
+                    v.published_at,
+                    v.duration,
+                    v.view_count,
+                    v.like_count,
+                    v.comment_count,
+                    v.live_broadcast_flag,
+                    v.url,
+                    v.tags_json,
+                    v.raw_payload_json,
+                    v.fetched_at,
+                )
+                for v in videos
+            ]
+            conn.executemany(sql, rows)
+        finally:
+            conn.close()
