@@ -6,7 +6,9 @@ import argparse
 import os
 from pathlib import Path
 
+from ytradar.clustering.topic_cluster import DeterministicTopicClusterer
 from ytradar.config.channels import load_channels_config
+from ytradar.config.clustering import load_clustering_config
 from ytradar.config.features import load_feature_config
 from ytradar.db import initialize_database
 from ytradar.db.repository import DuckDBRepository
@@ -74,6 +76,27 @@ def engineer_features_command(args: argparse.Namespace) -> None:
     print(f"Engineered and stored {len(features)} video feature rows.")
 
 
+def cluster_topics_command(args: argparse.Namespace) -> None:
+    """Build deterministic topic clusters and store topic candidates."""
+
+    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
+    clustering_config = Path(os.getenv("YTRADAR_CLUSTERING_CONFIG", "configs/clustering.yaml"))
+
+    initialize_database(db_path)
+
+    repository = DuckDBRepository(db_path)
+    rows = repository.fetch_rows_for_clustering()
+    if not rows:
+        print("No rows available for clustering. Run engineer-features first.")
+        return
+
+    config = load_clustering_config(clustering_config)
+    clusterer = DeterministicTopicClusterer(config)
+    candidates = clusterer.build_candidates(rows)
+    repository.upsert_topic_candidates(candidates)
+    print(f"Clustered and stored {len(candidates)} topic candidates.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the root parser."""
 
@@ -97,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Compute deterministic features from videos_raw into video_features",
     )
     features_parser.set_defaults(func=engineer_features_command)
+
+    cluster_parser = subparsers.add_parser(
+        "cluster-topics",
+        help="Cluster videos into deterministic topic candidates",
+    )
+    cluster_parser.set_defaults(func=cluster_topics_command)
 
     return parser
 

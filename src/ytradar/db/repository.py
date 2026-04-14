@@ -48,6 +48,22 @@ class VideoFeatureRecord:
     extracted_at: datetime
 
 
+@dataclass(slots=True)
+class TopicCandidateRecord:
+    """Clustered topic candidate ready for persistence."""
+
+    topic_cluster_id: str
+    representative_label: str
+    date_kst: str
+    source_video_count: int
+    source_channel_count: int
+    average_trend_score: float
+    top_video_id: str
+    recommended_format: str
+    status: str
+    generated_at: datetime
+
+
 class DuckDBRepository:
     """Simple repository for channels/videos tables."""
 
@@ -229,6 +245,81 @@ class DuckDBRepository:
                     f.extracted_at,
                 )
                 for f in features
+            ]
+            conn.executemany(sql, rows)
+        finally:
+            conn.close()
+
+    def fetch_rows_for_clustering(self) -> list[dict]:
+        """Fetch rows needed for deterministic topic clustering."""
+
+        sql = """
+        SELECT
+            vr.video_id,
+            vr.channel_id,
+            vr.title,
+            vf.normalized_text,
+            vf.keywords_json,
+            vf.trend_score
+        FROM videos_raw vr
+        INNER JOIN video_features vf ON vr.video_id = vf.video_id
+        WHERE vf.trend_score IS NOT NULL;
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(sql).fetchall()
+            columns = [col[0] for col in conn.description]
+            return [dict(zip(columns, row)) for row in rows]
+        finally:
+            conn.close()
+
+    def upsert_topic_candidates(self, candidates: list[TopicCandidateRecord]) -> None:
+        """Upsert clustered topic candidates."""
+
+        if not candidates:
+            return
+
+        sql = """
+        INSERT INTO topic_candidates (
+            topic_cluster_id,
+            representative_label,
+            date_kst,
+            source_video_count,
+            source_channel_count,
+            average_trend_score,
+            top_video_id,
+            recommended_format,
+            status,
+            generated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(topic_cluster_id) DO UPDATE SET
+            representative_label = excluded.representative_label,
+            date_kst = excluded.date_kst,
+            source_video_count = excluded.source_video_count,
+            source_channel_count = excluded.source_channel_count,
+            average_trend_score = excluded.average_trend_score,
+            top_video_id = excluded.top_video_id,
+            recommended_format = excluded.recommended_format,
+            status = excluded.status,
+            generated_at = excluded.generated_at;
+        """
+        conn = self._connect()
+        try:
+            rows = [
+                (
+                    c.topic_cluster_id,
+                    c.representative_label,
+                    c.date_kst,
+                    c.source_video_count,
+                    c.source_channel_count,
+                    c.average_trend_score,
+                    c.top_video_id,
+                    c.recommended_format,
+                    c.status,
+                    c.generated_at,
+                )
+                for c in candidates
             ]
             conn.executemany(sql, rows)
         finally:

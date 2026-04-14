@@ -79,13 +79,15 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS topic_candidates (
-            candidate_id BIGINT PRIMARY KEY,
-            candidate_type TEXT NOT NULL,
-            cluster_key TEXT NOT NULL,
-            candidate_title TEXT NOT NULL,
-            rationale TEXT,
-            score DOUBLE NOT NULL,
-            supporting_video_ids_json TEXT,
+            topic_cluster_id TEXT PRIMARY KEY,
+            representative_label TEXT NOT NULL,
+            date_kst TEXT NOT NULL,
+            source_video_count INTEGER NOT NULL,
+            source_channel_count INTEGER NOT NULL,
+            average_trend_score DOUBLE NOT NULL,
+            top_video_id TEXT NOT NULL,
+            recommended_format TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'new',
             generated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
         );
         """
@@ -108,8 +110,8 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
 
     conn.execute(
         """
-        CREATE INDEX IF NOT EXISTS idx_topic_candidates_type_score
-        ON topic_candidates (candidate_type, score);
+        CREATE INDEX IF NOT EXISTS idx_topic_candidates_date_score
+        ON topic_candidates (date_kst, average_trend_score);
         """
     )
 
