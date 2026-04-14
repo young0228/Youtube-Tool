@@ -6,14 +6,19 @@ import argparse
 import os
 from pathlib import Path
 
-from ytradar.collectors.youtube_collector import CollectorSettings, YouTubeMetadataCollector
 from ytradar.config.channels import load_channels_config
+from ytradar.config.features import load_feature_config
 from ytradar.db import initialize_database
 from ytradar.db.repository import DuckDBRepository
+from ytradar.features.engineer import FeatureEngineer
 
 
 def collect_metadata_command(args: argparse.Namespace) -> None:
     """Run metadata collection and save rows into `videos_raw`."""
+    from ytradar.collectors.youtube_collector import (
+        CollectorSettings,
+        YouTubeMetadataCollector,
+    )
 
     api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
     if not api_key:
@@ -48,6 +53,27 @@ def collect_metadata_command(args: argparse.Namespace) -> None:
     print(f"Fetched and stored {len(videos)} video metadata rows.")
 
 
+def engineer_features_command(args: argparse.Namespace) -> None:
+    """Compute deterministic features from videos_raw into video_features."""
+
+    db_path = Path(os.getenv("YTRADAR_DB_PATH", "data/radar.duckdb"))
+    features_config = Path(os.getenv("YTRADAR_FEATURES_CONFIG", "configs/features.yaml"))
+
+    initialize_database(db_path)
+
+    repository = DuckDBRepository(db_path)
+    rows = repository.fetch_videos_raw()
+    if not rows:
+        print("No videos_raw rows found. Run collect-metadata first.")
+        return
+
+    config = load_feature_config(features_config)
+    engineer = FeatureEngineer(config)
+    features = engineer.build_features(rows)
+    repository.upsert_video_features(features)
+    print(f"Engineered and stored {len(features)} video feature rows.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the root parser."""
 
@@ -65,6 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Lookback window in days for recent videos",
     )
     collect_parser.set_defaults(func=collect_metadata_command)
+
+    features_parser = subparsers.add_parser(
+        "engineer-features",
+        help="Compute deterministic features from videos_raw into video_features",
+    )
+    features_parser.set_defaults(func=engineer_features_command)
 
     return parser
 

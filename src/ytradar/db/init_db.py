@@ -61,14 +61,16 @@ def _create_schema(conn: duckdb.DuckDBPyConnection) -> None:
         CREATE TABLE IF NOT EXISTS video_features (
             video_id TEXT PRIMARY KEY,
             extracted_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
-            normalized_title TEXT,
-            normalized_description TEXT,
+            normalized_text TEXT,
+            hours_since_publish DOUBLE,
+            views_per_hour DOUBLE,
+            engagement_rate DOUBLE,
+            comment_velocity DOUBLE,
+            keyword_score DOUBLE,
+            risk_score DOUBLE,
+            is_short_guess BOOLEAN,
             keywords_json TEXT,
-            topic_labels_json TEXT,
             trend_score DOUBLE,
-            recency_score DOUBLE,
-            engagement_score DOUBLE,
-            velocity_score DOUBLE,
             FOREIGN KEY (video_id) REFERENCES videos_raw(video_id)
         );
         """

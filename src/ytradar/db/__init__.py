@@ -5,6 +5,11 @@ DuckDB database used by the MVP pipeline.
 """
 
 from .init_db import initialize_database
-from .repository import DuckDBRepository, VideoRawRecord
+from .repository import DuckDBRepository, VideoFeatureRecord, VideoRawRecord
 
-__all__ = ["initialize_database", "DuckDBRepository", "VideoRawRecord"]
+__all__ = [
+    "initialize_database",
+    "DuckDBRepository",
+    "VideoRawRecord",
+    "VideoFeatureRecord",
+]

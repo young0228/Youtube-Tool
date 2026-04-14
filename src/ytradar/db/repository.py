@@ -30,6 +30,24 @@ class VideoRawRecord:
     fetched_at: datetime
 
 
+@dataclass(slots=True)
+class VideoFeatureRecord:
+    """Deterministic engineered feature record for one video."""
+
+    video_id: str
+    normalized_text: str
+    hours_since_publish: float
+    views_per_hour: float
+    engagement_rate: float
+    comment_velocity: float
+    keyword_score: float
+    risk_score: float
+    trend_score: float
+    is_short_guess: bool
+    keywords_json: str | None
+    extracted_at: datetime
+
+
 class DuckDBRepository:
     """Simple repository for channels/videos tables."""
 
@@ -129,6 +147,88 @@ class DuckDBRepository:
                     v.fetched_at,
                 )
                 for v in videos
+            ]
+            conn.executemany(sql, rows)
+        finally:
+            conn.close()
+
+    def fetch_videos_raw(self) -> list[dict]:
+        """Fetch metadata rows required for feature engineering."""
+
+        sql = """
+        SELECT
+            video_id,
+            title,
+            description,
+            duration,
+            published_at,
+            view_count,
+            like_count,
+            comment_count
+        FROM videos_raw;
+        """
+        conn = self._connect()
+        try:
+            rows = conn.execute(sql).fetchall()
+            columns = [col[0] for col in conn.description]
+            return [dict(zip(columns, row)) for row in rows]
+        finally:
+            conn.close()
+
+    def upsert_video_features(self, features: list[VideoFeatureRecord]) -> None:
+        """Upsert engineered features into `video_features`."""
+
+        if not features:
+            return
+
+        sql = """
+        INSERT INTO video_features (
+            video_id,
+            normalized_text,
+            hours_since_publish,
+            views_per_hour,
+            engagement_rate,
+            comment_velocity,
+            keyword_score,
+            risk_score,
+            trend_score,
+            is_short_guess,
+            keywords_json,
+            extracted_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(video_id) DO UPDATE SET
+            normalized_text = excluded.normalized_text,
+            hours_since_publish = excluded.hours_since_publish,
+            views_per_hour = excluded.views_per_hour,
+            engagement_rate = excluded.engagement_rate,
+            comment_velocity = excluded.comment_velocity,
+            keyword_score = excluded.keyword_score,
+            risk_score = excluded.risk_score,
+            trend_score = excluded.trend_score,
+            is_short_guess = excluded.is_short_guess,
+            keywords_json = excluded.keywords_json,
+            extracted_at = excluded.extracted_at;
+        """
+
+        conn = self._connect()
+        try:
+            rows = [
+                (
+                    f.video_id,
+                    f.normalized_text,
+                    f.hours_since_publish,
+                    f.views_per_hour,
+                    f.engagement_rate,
+                    f.comment_velocity,
+                    f.keyword_score,
+                    f.risk_score,
+                    f.trend_score,
+                    f.is_short_guess,
+                    f.keywords_json,
+                    f.extracted_at,
+                )
+                for f in features
             ]
             conn.executemany(sql, rows)
         finally:

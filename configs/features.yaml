@@ -1,0 +1,30 @@
+version: 1
+
+# Terms used to compute keyword_score from normalized title+description text.
+keyword_terms:
+  - "총선"
+  - "대선"
+  - "국회"
+  - "검찰"
+  - "민생"
+  - "외교"
+
+# Terms used to compute risk_score (for conservative penalty in trend score).
+risk_terms:
+  - "허위"
+  - "의혹"
+  - "폭로"
+  - "논란"
+  - "고발"
+
+weights:
+  # normalized views-per-hour contribution
+  views_per_hour: 0.40
+  # normalized engagement-rate contribution
+  engagement_rate: 0.30
+  # normalized comments-per-hour contribution
+  comment_velocity: 0.20
+  # keyword relevance contribution
+  keyword_score: 0.15
+  # risk penalty amount (subtracted)
+  risk_penalty: 0.05
