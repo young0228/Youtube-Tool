@@ -1,0 +1,20 @@
+version: 1
+
+# Minimum Jaccard similarity of title token sets to merge into same cluster.
+min_title_jaccard: 0.30
+
+# Minimum keyword overlap ratio to force merge regardless of title token score.
+min_keyword_overlap: 0.50
+
+# Token filtering controls.
+min_token_length: 2
+stopwords:
+  - "뉴스"
+  - "이슈"
+  - "영상"
+  - "속보"
+  - "라이브"
+
+# Format recommendation thresholds.
+min_cluster_size_for_longform: 3
+min_cluster_size_for_both: 5
