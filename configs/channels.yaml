@@ -1,0 +1,109 @@
+version: 1
+channels:
+  - channel_key: ktv_imagine
+    display_name: "ktv 이매진"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: official
+    active: false
+
+  - channel_key: natv_assembly
+    display_name: "natv 국회방송"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: official
+    active: false
+
+  - channel_key: lee_jaemyung
+    display_name: "이재명"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: official
+    active: false
+
+  - channel_key: deliminju
+    display_name: "델리민주"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: official
+    active: false
+
+  - channel_key: ktv_kookmin
+    display_name: "ktv 국민방송"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: official
+    active: false
+
+  - channel_key: mbc_radio_current
+    display_name: "mbc 라디오 시사"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: maebulshow
+    display_name: "매불쇼"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: humble_power
+    display_name: "겸손은 힘들다"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: jang_yoonseon
+    display_name: "장윤선의 취재편의점"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: spicks
+    display_name: "스픽스"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: daeahn_news
+    display_name: "대안뉴스"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: sisain
+    display_name: "시사in"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: choi_kyunyoung_tv
+    display_name: "최경영 tv"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: current_affairs
+    active: false
+
+  - channel_key: ceo_namcheon
+    display_name: "사장남천동"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: commentary
+    active: false
+
+  - channel_key: kangsungbeom_tv
+    display_name: "강성범tv"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: commentary
+    active: false
+
+  - channel_key: yeouido_mullae
+    display_name: "여의도 옆 문래동"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: commentary
+    active: false
+
+  - channel_key: baekwoongi_jeongeori
+    display_name: "백운기의 정어리 tv"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: commentary
+    active: false
+
+  - channel_key: bongjiwook_offrecord
+    display_name: "봉지욱의 오프더레코드"
+    youtube_channel_id: "REPLACE_WITH_CHANNEL_ID"
+    group: commentary
+    active: false
